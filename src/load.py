@@ -1,17 +1,13 @@
-###############################################################################
-# A simple EDMC plugin to automatically transmit CodexEntry data from the
-# CMDR journal to the Intergalactic Astronomical Union and EDAstro.com
-# for record keeping, and scientific purposes.
+# -*- coding: utf-8 -*-
+# EDAstroSync plugin for EDMC
+# Source: https://github.com/Silarn/EDAstro
+# Licensed under the [GNU Public License (GPL)](http://www.gnu.org/licenses/gpl-2.0.html) version 2 or later.
 #
-# Data Catalog available at:
-# https://raw.githubusercontent.com/Elite-IGAU/publications/master/IGAU_Codex.csv
+# A simple EDMC plugin to automatically transmit relevant journal data from the
+# ED journals to EDAstro.com for record keeping, and scientific purposes.
 #
 # EDAstro Data charts available at:
 # http://edastro.com
-#
-# Please Note: With EDDN and EDSM now carrying Codex data, IGAU will disable this
-# plugin on Dec 31st, 2022
-#
 ###############################################################################
 
 import os
