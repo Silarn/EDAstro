@@ -34,7 +34,7 @@ class This:
     status = tk.StringVar()
     edsm_setting = None
     app_name = 'EDAstro Sync'
-    installed_version = 1.57
+    installed_version = 1.0
     github_latest_version = "https://raw.githubusercontent.com/Silarn/EDAstro/latest/src/version.txt"
     plugin_source = "https://raw.githubusercontent.com/Silarn/EDAstro/latest/src/load.py"
     latest_version_str = ""
