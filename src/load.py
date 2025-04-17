@@ -33,7 +33,7 @@ class This:
     status = tk.StringVar()
     edsm_setting = None
     app_name = 'EDAstro Sync'
-    current_version = '1.0.0-beta'
+    current_version = '1.0.0-rc.1'
     github_latest_release = 'https://api.github.com/repos/Silarn/EDAstro/releases/latest'
     plugin_source = 'https://raw.githubusercontent.com/Silarn/EDAstro/v{}/src/load.py'
     latest_version = None
@@ -59,7 +59,7 @@ def plugin_app(parent):
     this.frame.columnconfigure(2, weight=1)
     this.status_label = tk.Label(this.frame, anchor=tk.W, textvariable=this.status, wraplength=255)
     this.status_label.grid(row=0, column=1, sticky=tk.W)
-    this.status.set('Waiting for data...')
+    this.status.set('EDAstro Sync: Waiting for data...')
     return this.frame
 
 
@@ -98,12 +98,12 @@ def check_version():
         this.latest_version = semantic_version.Version(data['tag_name'][1:])
         this.latest_version_str = str(this.latest_version)
         if this.latest_version > semantic_version.Version(this.current_version):
-            upgrade_callback()
+            update_callback()
     except (requests.RequestException, requests.JSONDecodeError) as ex:
         logger.error('Failed to parse GitHub release info', exc_info=ex)
 
 
-def upgrade_callback():
+def update_callback():
     this_fullpath = os.path.realpath(__file__)
     this_filepath, this_extension = os.path.splitext(this_fullpath)
     corrected_fullpath = this_filepath + '.py'
@@ -116,21 +116,30 @@ def upgrade_callback():
                 f.truncate()
                 f.flush()
                 os.fsync(f.fileno())
-                this.upgrade_applied = True  # Latch on upgrade successful
-                msginfo = ['EDAstro Sync Upgrade '+this.latest_version_str+' has completed sucessfully.',
+                #this.upgrade_applied = True  # Latch on upgrade successful
+                msginfo = ['Version '+this.latest_version_str+' has installed successfully.',
                            'Please close and restart EDMC']
-                messagebox.showinfo('Upgrade status', '\n'.join(msginfo))
-            logger.info('Finished EDAstro Sync upgrade!\n')
+                messagebox.showinfo('EDAstro Sync Update Status', '\n'.join(msginfo))
+            logger.info(f'Plugin was updated to {this.latest_version_str}')
 
         else:
-            msginfo = ['EDAstro Sync Upgrade failed. Bad server response',
-            'Please try again']
-            messagebox.showinfo('Upgrade status', '\n'.join(msginfo))
-    except:
-        this.upgrade_applied = True  # Latch on upgrade successful
-        msginfo = ['EDAstro Sync Upgrade '+this.latest_version_str+' has completed sucessfully.',
-                   'Please close and restart EDMC']
-        messagebox.showinfo('Upgrade status', '\n'.join(msginfo))
+            msginfo = ['An update appears to be available but there was a failure downloading the files.',
+                       'You can manually update the plugin or restart EDMC to try again.',
+                       'If this continues, please submit an issue on GitHub.']
+            messagebox.showinfo('EDAstro Sync Update Status', '\n'.join(msginfo))
+            logger.error(f'Failure to update plugin: Bad response\nURL: {this.plugin_source.format(this.latest_version)}')
+    except requests.exceptions.RequestException as ex:
+        msginfo = ['An update appears to be available but a problem occurred during the download.',
+                   'You can manually update the plugin or restart EDMC to try again.',
+                   'If this continues, please submit an issue on GitHub.']
+        messagebox.showinfo('EDAstro Sync Update Status', '\n'.join(msginfo))
+        logger.error(f'Failure to update plugin: Network exception', exc_info=ex)
+    except OSError as ex:
+        msginfo = ['An update appears to be available but a problem occurred during the download.',
+                   'You can manually update the plugin or restart EDMC to try again.',
+                   'If this continues, please submit an issue on GitHub.']
+        messagebox.showinfo('EDAstro Sync Update Status', '\n'.join(msginfo))
+        logger.error(f'Failure to update plugin: OS / write exception', exc_info=ex)
 
 
 def edastro_update(system, entry, state):
@@ -146,9 +155,9 @@ def edastro_update(system, entry, state):
             event_list = json.loads(event_json)
             this.edastro_dict = dict.fromkeys(event_list,1)
             this.edastro_epoch = int(time.time())
-            this.status.set('EDAstro events retrieved')
+            this.status.set('EDAstro Sync: Requested events retrieved')
         except:
-            this.status.set('EDAstro retrieval fail')
+            this.status.set('EDAstro Sync: Event retrieval failure!')
     if event_name in this.edastro_dict.keys():
         #this.status.set('Sending EDAstro data...')
         app_header = {'appName': this.app_name, 'appVersion':this.installed_version, 'odyssey':state.get('Odyssey'), 'system':system }
@@ -161,19 +170,21 @@ def edastro_update(system, entry, state):
                 edastro = json.loads(response.text)
                 if str(edastro['status']) == '200' or str(edastro['status']) == '401':
                     # 200 = at least one event accepted, 401 = none were accepted, but no errors either
-                    this.status.set(f'EDAstro data sent! ({event_name})')
+                    this.status.set(f'EDAstro Sync: Data sent! ({event_name})')
                 else:
-                    this.status.set('EDAstro: [{}] {}'.format(edastro['status'],edastro['message']))
+                    this.status.set('EDAstro Sync: Unexpected Response')
+                    logger.debug(f'Error Response:\nRequest: {this.edastro_push}\n Response ({edastro['status']}): \n{edastro['message']}')
             else:
-                this.status.set('EDAstro POST: "{}"'.format(response.status_code))
+                this.status.set('EDAstro Sync: Unexpected Response')
+                logger.debug(f'Unexpected Response:\nRequest: {this.edastro_push}\n Response ({response.status_code}):\n{response.text}')
         except Exception as ex:
-            logger.exception('Failed to submit EDAstro data', exc_info=ex)
-            this.status.set('EDAstro submission failed')
+            this.status.set('EDAstro Sync: Unexpected Error')
+            logger.exception(f'Failed to submit EDAstro data:\nRequest: {this.edastro_push}', exc_info=ex)
 
 
 def journal_entry(cmdr, is_beta, system, station, entry, state):
     try:
         edastro_update(system, entry, state)
     except Exception as ex:
+        this.status.set('EDAstro Sync: Failed to Generate Report')
         logger.exception(f'EDAstro submission failure:\n{entry["event"]}', exc_info=ex)
-        this.status.set('Submission Failure; Please Report')
