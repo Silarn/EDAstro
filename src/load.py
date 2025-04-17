@@ -14,6 +14,9 @@ import os
 import json
 import requests
 import tkinter as tk
+
+import semantic_version
+
 from ttkHyperlinkLabel import HyperlinkLabel
 from tkinter import messagebox
 import myNotebook as nb
@@ -30,9 +33,10 @@ class This:
     status = tk.StringVar()
     edsm_setting = None
     app_name = 'EDAstro Sync'
-    installed_version = 1.0
-    github_latest_version = 'https://raw.githubusercontent.com/Silarn/EDAstro/latest/src/version.txt'
-    plugin_source = 'https://raw.githubusercontent.com/Silarn/EDAstro/latest/src/load.py'
+    current_version = '1.0.0'
+    github_latest_release = 'https://api.github.com/repos/Silarn/EDAstro/releases/latest'
+    plugin_source = 'https://raw.githubusercontent.com/Silarn/EDAstro/v{}/src/load.py'
+    latest_version = None
     latest_version_str = ''
     edastro_get = 'https://edastro.com/api/accepting'
     edastro_push = 'https://edastro.com/api/journal'
@@ -62,13 +66,20 @@ def plugin_app(parent):
 def plugin_prefs(parent, cmdr, is_beta):
     frame = nb.Frame(parent)
     frame.columnconfigure(5, weight=1)
-    response = requests.get(url = this.github_latest_version)
-    this.latest_version = float(response.content.strip().decode('utf-8'))
-    this.latest_version_str = str(this.latest_version)
-    nb.Label(frame, text='EDAstro Sync {INSTALLED}'.format(INSTALLED=this.installed_version)) \
+    try:
+        response = requests.get(url = this.github_latest_release)
+        data = response.json()
+        if response.status_code != requests.codes.ok:
+            raise requests.RequestException
+        this.latest_version = semantic_version.Version(data['tag_name'][1:])
+        this.latest_version_str = str(this.latest_version)
+    except (requests.RequestException, requests.JSONDecodeError) as ex:
+        logger.error('Failed to parse GitHub release info', exc_info=ex)
+    nb.Label(frame, text='EDAstro Sync {INSTALLED}'.format(INSTALLED=this.current_version)) \
         .grid(columnspan=2, padx=PADX, sticky=tk.W)
-    nb.Label(frame, text='Latest EDAstro Sync version: {latest_version_str}'.format(latest_version_str=this.latest_version_str)) \
-        .grid(columnspan=2, padx=PADX, sticky=tk.W)
+    if this.latest_version_str:
+        nb.Label(frame, text='Latest EDAstro Sync version: {latest_version_str}'.format(latest_version_str=this.latest_version_str)) \
+            .grid(columnspan=2, padx=PADX, sticky=tk.W)
     HyperlinkLabel(frame, text='GitHub', background=nb.Label().cget('background'),
                    url='https://github.com/Silarn/EDAstro\n',
                    underline=True).grid(padx=PADX, sticky=tk.W)
@@ -79,11 +90,17 @@ def plugin_prefs(parent, cmdr, is_beta):
 
 
 def check_version():
-    response = requests.get(url = this.github_latest_version)
-    this.latest_version = float(response.content.strip().decode('utf-8'))
-    this.latest_version_str = str(this.latest_version)
-    if this.latest_version > this.installed_version:
-        upgrade_callback()
+    try:
+        response = requests.get(url = this.github_latest_release)
+        data = response.json()
+        if response.status_code != requests.codes.ok:
+            raise requests.RequestException
+        this.latest_version = semantic_version.Version(data['tag_name'][1:])
+        this.latest_version_str = str(this.latest_version)
+        if this.latest_version > semantic_version.Version(this.current_version):
+            upgrade_callback()
+    except (requests.RequestException, requests.JSONDecodeError) as ex:
+        logger.error('Failed to parse GitHub release info', exc_info=ex)
 
 
 def upgrade_callback():
@@ -91,7 +108,7 @@ def upgrade_callback():
     this_filepath, this_extension = os.path.splitext(this_fullpath)
     corrected_fullpath = this_filepath + '.py'
     try:
-        response = requests.get(this.plugin_source)
+        response = requests.get(this.plugin_source.format(this.latest_version))
         if response.status_code == 200:
             with open(corrected_fullpath, 'wb') as f:
                 f.seek(0)
