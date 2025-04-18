@@ -65,7 +65,7 @@ class This:
         'CarrierJumpRequest': [
             'timestamp',
             'event',
-            'StarSystem',
+            'SystemName',
             'SystemAddress',
             'CarrierID'
         ]
@@ -204,8 +204,7 @@ def edastro_update(system, entry, state):
             logger.exception('Failure to fetch EDAstro event list.', exc_info=ex)
     if event_name in this.edastro_dict.keys():
         filtered_entry = filter_event_data(entry)
-        logger.debug(f'Filtered event data: {filtered_entry}')
-        app_header = {'appName': this.app_name, 'appVersion':this.installed_version, 'odyssey':state.get('Odyssey'), 'system':system }
+        app_header = {'appName': this.app_name, 'appVersion':this.current_version, 'odyssey':state.get('Odyssey'), 'system':system }
         event_object = [app_header, filtered_entry]
         event_data = json.dumps(event_object)
         try:
