@@ -12,11 +12,15 @@
 
 import os
 import json
+from typing import Any
+
 import requests
 import tkinter as tk
+from tkinter import ttk
 
 import semantic_version
 
+from config import config
 from ttkHyperlinkLabel import HyperlinkLabel
 from tkinter import messagebox
 import myNotebook as nb
@@ -43,6 +47,30 @@ class This:
     edastro_epoch = 0
     edastro_dict = {}
 
+    carrierstats = tk.BooleanVar()
+    carrierjumprequest = tk.BooleanVar()
+
+    event_filters = {
+        'CarrierStats': [
+            'timestamp',
+            'event',
+            'Callsign',
+            'Name',
+            'CarrierID',
+            'AllowNotorious',
+            'PendingDecommission',
+            'DockingAccess',
+            'FuelLevel'
+        ],
+        'CarrierJumpRequest': [
+            'timestamp',
+            'event',
+            'StarSystem',
+            'SystemAddress',
+            'CarrierID'
+        ]
+    }
+
 
 this = This()
 PADX = 10
@@ -60,12 +88,14 @@ def plugin_app(parent):
     this.status_label = tk.Label(this.frame, anchor=tk.W, textvariable=this.status, wraplength=255)
     this.status_label.grid(row=0, column=1, sticky=tk.W)
     this.status.set('EDAstro Sync: Waiting for data...')
+    this.carrierstats.set(config.get_bool('edastro_allow_carrierstats', default=False))
+    this.carrierjumprequest.set(config.get_bool('edastro_allow_carrierjumprequest', default=False))
     return this.frame
 
 
 def plugin_prefs(parent, cmdr, is_beta):
     frame = nb.Frame(parent)
-    frame.columnconfigure(5, weight=1)
+    frame.columnconfigure(0, weight=1)
     try:
         response = requests.get(url = this.github_latest_release)
         data = response.json()
@@ -76,17 +106,27 @@ def plugin_prefs(parent, cmdr, is_beta):
     except (requests.RequestException, requests.JSONDecodeError) as ex:
         logger.error('Failed to parse GitHub release info', exc_info=ex)
     nb.Label(frame, text='EDAstro Sync {INSTALLED}'.format(INSTALLED=this.current_version)) \
-        .grid(columnspan=2, padx=PADX, sticky=tk.W)
+        .grid(padx=PADX, sticky=tk.W)
     if this.latest_version_str:
         nb.Label(frame, text='Latest EDAstro Sync version: {latest_version_str}'.format(latest_version_str=this.latest_version_str)) \
-            .grid(columnspan=2, padx=PADX, sticky=tk.W)
+            .grid(padx=PADX, sticky=tk.W)
     HyperlinkLabel(frame, text='GitHub', background=nb.Label().cget('background'),
                    url='https://github.com/Silarn/EDAstro\n',
                    underline=True).grid(padx=PADX, sticky=tk.W)
     HyperlinkLabel(frame, text='EDAstro', background=nb.Label().cget('background'),
                    url='https://edastro.com\n', underline=True) \
         .grid(padx=PADX, sticky=tk.W)
+    ttk.Separator(frame).grid(sticky=tk.EW)
+    nb.Checkbutton(frame, text='Allow CarrierStats Events', variable=this.carrierstats) \
+        .grid(padx=PADX, sticky=tk.W)
+    nb.Checkbutton(frame, text='Allow CarrierJumpRequest Events', variable=this.carrierjumprequest) \
+        .grid(padx=PADX, sticky=tk.W)
     return frame
+
+
+def prefs_changed(cmdr: str, is_beta: bool) -> None:
+    config.set('edastro_allow_carrierstats', this.carrierstats.get())
+    config.set('edastro_allow_carrierjumprequest', this.carrierjumprequest.get())
 
 
 def check_version():
@@ -142,26 +182,31 @@ def update_callback():
         logger.error(f'Failure to update plugin: OS / write exception', exc_info=ex)
 
 
+def filter_event_data(entry) -> dict[str, Any]:
+    if entry['event'] in this.event_filters:
+        return {key: entry[key] for key in this.event_filters[entry['event']] if key in entry}
+    return entry
+
+
 def edastro_update(system, entry, state):
     event_name = str(entry['event'])
     if this.edastro_epoch == 0 or int(time.time()) - this.edastro_epoch > 3600:
-        #this.status.set('Retrieving EDAstro events')
-        event_list = ''
         try:
             this.edastro_epoch = int(time.time()) - 3000
             response = requests.get(url = this.edastro_get)
             event_json = response.content.strip().decode('utf-8')
-            #this.status.set('Event list: '+event_json);
             event_list = json.loads(event_json)
             this.edastro_dict = dict.fromkeys(event_list,1)
             this.edastro_epoch = int(time.time())
             this.status.set('EDAstro Sync: Requested events retrieved')
-        except:
+        except Exception as ex:
             this.status.set('EDAstro Sync: Event retrieval failure!')
+            logger.exception('Failure to fetch EDAstro event list.', exc_info=ex)
     if event_name in this.edastro_dict.keys():
-        #this.status.set('Sending EDAstro data...')
+        filtered_entry = filter_event_data(entry)
+        logger.debug(f'Filtered event data: {filtered_entry}')
         app_header = {'appName': this.app_name, 'appVersion':this.installed_version, 'odyssey':state.get('Odyssey'), 'system':system }
-        event_object = [app_header, entry]
+        event_object = [app_header, filtered_entry]
         event_data = json.dumps(event_object)
         try:
             json_header = {'Content-Type': 'application/json'}
@@ -173,7 +218,7 @@ def edastro_update(system, entry, state):
                     this.status.set(f'EDAstro Sync: Data sent! ({event_name})')
                 else:
                     this.status.set('EDAstro Sync: Unexpected Response')
-                    logger.debug(f'Error Response:\nRequest: {this.edastro_push}\n Response ({edastro['status']}): \n{edastro['message']}')
+                    logger.debug(f'Error Response:\nRequest: {this.edastro_push}\n Response ({edastro["status"]}): \n{edastro["message"]}')
             else:
                 this.status.set('EDAstro Sync: Unexpected Response')
                 logger.debug(f'Unexpected Response:\nRequest: {this.edastro_push}\n Response ({response.status_code}):\n{response.text}')
@@ -182,7 +227,11 @@ def edastro_update(system, entry, state):
             logger.exception(f'Failed to submit EDAstro data:\nRequest: {this.edastro_push}', exc_info=ex)
 
 
-def journal_entry(cmdr, is_beta, system, station, entry, state):
+def journal_entry(cmdr, is_beta, system, station, entry, state) -> str | None:
+    if entry['event'] == 'CarrierStats' and not this.carrierstats.get():
+        return
+    if entry['event'] == 'CarrierJumpRequest' and not this.carrierjumprequest.get():
+        return
     try:
         edastro_update(system, entry, state)
     except Exception as ex:
