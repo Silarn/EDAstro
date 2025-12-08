@@ -1,3 +1,6 @@
+**This plugin is no longer needed as of EDMC 6.0.0. This functionality is now
+included in core EDMC.**
+
 A simple [E:D Market Connector][EDMC] plugin to automatically collect data for
 EDAstro.com that cannot be sourced from major databases such as Spansh and EDDN.
 
@@ -34,4 +37,5 @@ detected.
 [EDMC]: https://github.com/EDCD/EDMarketConnector
 [EDDiscovery]: https://github.com/EDDiscovery/EDDiscovery
 [ATEL-EDMC]: https://github.com/Intergalactic-Astronomical-Union/ATEL-EDMC
+
 [release archive]: https://github.com/Silarn/EDAstro/releases/latest
