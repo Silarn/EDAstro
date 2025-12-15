@@ -36,8 +36,8 @@ logger = get_plugin_logger(f'{plugin_name}')
 class This:
     status = tk.StringVar()
     edsm_setting = None
-    app_name = 'EDAstro Sync'
-    current_version = '1.0.0'
+    app_name = 'EDAstro Sync (Deprecated)'
+    current_version = '1.0.1'
     github_latest_release = 'https://api.github.com/repos/Silarn/EDAstro/releases/latest'
     plugin_source = 'https://raw.githubusercontent.com/Silarn/EDAstro/v{}/src/load.py'
     latest_version = None
@@ -77,7 +77,6 @@ PADX = 10
 
 
 def plugin_start3(plugin_dir):
-    check_version()
     return 'EDAstro Sync'
 
 
@@ -87,7 +86,7 @@ def plugin_app(parent):
     this.frame.columnconfigure(2, weight=1)
     this.status_label = tk.Label(this.frame, anchor=tk.W, textvariable=this.status, wraplength=255)
     this.status_label.grid(row=0, column=1, sticky=tk.W)
-    this.status.set('EDAstro Sync: Waiting for data...')
+    this.status.set('EDAstro Sync: Plugin is Deprecated')
     this.carrierstats.set(config.get_bool('edastro_allow_carrierstats', default=False))
     this.carrierjumprequest.set(config.get_bool('edastro_allow_carrierjumprequest', default=False))
     return this.frame
@@ -96,30 +95,9 @@ def plugin_app(parent):
 def plugin_prefs(parent, cmdr, is_beta):
     frame = nb.Frame(parent)
     frame.columnconfigure(0, weight=1)
-    try:
-        response = requests.get(url = this.github_latest_release)
-        data = response.json()
-        if response.status_code != requests.codes.ok:
-            raise requests.RequestException
-        this.latest_version = semantic_version.Version(data['tag_name'][1:])
-        this.latest_version_str = str(this.latest_version)
-    except (requests.RequestException, requests.JSONDecodeError) as ex:
-        logger.error('Failed to parse GitHub release info', exc_info=ex)
     nb.Label(frame, text='EDAstro Sync {INSTALLED}'.format(INSTALLED=this.current_version)) \
         .grid(padx=PADX, sticky=tk.W)
-    if this.latest_version_str:
-        nb.Label(frame, text='Latest EDAstro Sync version: {latest_version_str}'.format(latest_version_str=this.latest_version_str)) \
-            .grid(padx=PADX, sticky=tk.W)
-    HyperlinkLabel(frame, text='GitHub', background=nb.Label().cget('background'),
-                   url='https://github.com/Silarn/EDAstro\n',
-                   underline=True).grid(padx=PADX, sticky=tk.W)
-    HyperlinkLabel(frame, text='EDAstro', background=nb.Label().cget('background'),
-                   url='https://edastro.com\n', underline=True) \
-        .grid(padx=PADX, sticky=tk.W)
-    ttk.Separator(frame).grid(sticky=tk.EW)
-    nb.Checkbutton(frame, text='Allow CarrierStats Events', variable=this.carrierstats) \
-        .grid(padx=PADX, sticky=tk.W)
-    nb.Checkbutton(frame, text='Allow CarrierJumpRequest Events', variable=this.carrierjumprequest) \
+    nb.Label(frame, text='EDAstro Sync is Deprecated\nFunctionily is Default in EDMC 6.0.0\nPlease Uninstall') \
         .grid(padx=PADX, sticky=tk.W)
     return frame
 
@@ -127,20 +105,6 @@ def plugin_prefs(parent, cmdr, is_beta):
 def prefs_changed(cmdr: str, is_beta: bool) -> None:
     config.set('edastro_allow_carrierstats', this.carrierstats.get())
     config.set('edastro_allow_carrierjumprequest', this.carrierjumprequest.get())
-
-
-def check_version():
-    try:
-        response = requests.get(url = this.github_latest_release)
-        data = response.json()
-        if response.status_code != requests.codes.ok:
-            raise requests.RequestException
-        this.latest_version = semantic_version.Version(data['tag_name'][1:])
-        this.latest_version_str = str(this.latest_version)
-        if this.latest_version > semantic_version.Version(this.current_version):
-            update_callback()
-    except (requests.RequestException, requests.JSONDecodeError) as ex:
-        logger.error('Failed to parse GitHub release info', exc_info=ex)
 
 
 def update_callback():
@@ -227,12 +191,4 @@ def edastro_update(system, entry, state):
 
 
 def journal_entry(cmdr, is_beta, system, station, entry, state) -> str | None:
-    if entry['event'] == 'CarrierStats' and not this.carrierstats.get():
-        return
-    if entry['event'] == 'CarrierJumpRequest' and not this.carrierjumprequest.get():
-        return
-    try:
-        edastro_update(system, entry, state)
-    except Exception as ex:
-        this.status.set('EDAstro Sync: Failed to Generate Report')
-        logger.exception(f'EDAstro submission failure:\n{entry["event"]}', exc_info=ex)
+    return
